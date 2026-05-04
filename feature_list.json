@@ -4,13 +4,13 @@
   "rules": {
     "one_feature_at_a_time": true,
     "require_tests_to_close": true,
+    "security_checks": true,
     "valid_status": [
       "pending",
       "in_progress",
       "done",
       "blocked"
-    ],
-    "security_checks": false
+    ]
   },
   "features": [
     {
@@ -23,7 +23,7 @@
         "Criterio de aceptación 2",
         "Criterio de aceptación 3"
       ],
-      "status": "pending"
+      "status": "done"
     }
   ]
 }
