@@ -23,51 +23,7 @@
         "Criterio de aceptación 2",
         "Criterio de aceptación 3"
       ],
-      "status": "done"
-    },
-    {
-      "id": 2,
-      "name": "mejorar_seguridad_template",
-      "title": "Fortalecer seguridad del template Harness Engineering",
-      "description": "Aplicar parches de seguridad críticos detectados en el análisis del arnés: sanitización de inputs, prevención de ejecución arbitraria de código, validación de symlinks, ampliación de detección de secrets y hardening de scripts del harness.",
-      "acceptance": [
-        "init.sh usa set -euo pipefail y sanitiza el parseo de requirements.txt para prevenir code injection",
-        "security-check.py no excluye harness/ del análisis de comandos peligrosos y detecta más patrones de secrets (JWT, GitHub tokens, AWS, secrets en config)",
-        "start.py, done.py, block.py y doctor.py validan que archivos críticos (feature_list.json, progress/current.md) no sean symlinks antes de leer/escribir",
-        "block.py --from-file valida que la ruta objetivo esté dentro del directorio del proyecto (path traversal prevention)",
-        ".gitignore incluye .ssh/ y otros patrones sensibles que security-check.py espera encontrar",
-        "docs/security.md documenta un threat model básico, mejores prácticas de hardening y actualiza las reglas de verificación automatizada"
-      ],
-      "status": "done"
-    },
-    {
-      "id": 3,
-      "name": "integrar_sast_y_dependency_audit",
-      "title": "Integrar escaneo de vulnerabilidades de aplicación y dependencias",
-      "description": "Extender security-check.py para detectar vulnerabilidades de aplicación web (SQLi, XSS, command injection) mediante SAST, y vulnerabilidades en dependencias (CVEs). Añadir checklist OWASP Top 10 en docs/security.md para proyectos web.",
-      "acceptance": [
-        "security-check.py detecta SQL injection, command injection y XSS en código Python mediante patrones regex (SAST básico)",
-        "security-check.py escanea dependencias por CVEs conocidos usando herramientas nativas del stack (pip-audit para Python, npm audit para Node, go mod vuln para Go)",
-        "security-check.py detecta leaks de secrets en el historial de git con un scan básico de git log",
-        "docs/security.md incluye una seccion 'Seguridad de aplicación web' con checklist OWASP Top 10 y recomendaciones por stack",
-        "Los nuevos checks de SAST y dependency audit son opcionales y no bloquean el cierre si el proyecto no es una aplicación web",
-        "Se documenta en docs/security.md cómo desactivar checks específicos por stack si el proyecto no los necesita"
-      ],
-      "status": "done"
-    },
-    {
-      "id": 4,
-      "name": "github_actions_ci",
-      "title": "Integrar GitHub Actions CI para verificación automática del arnés",
-      "description": "Añadir un workflow de GitHub Actions que verifique automáticamente el arnés en cada PR y push a main. El workflow ejecuta init.sh y security-check.py para garantizar que el template no se mergea roto.",
-      "acceptance": [
-        "Workflow .github/workflows/ci.yml ejecuta init.sh en cada PR/push a main",
-        "Workflow ejecuta security-check.py en cada PR/push a main",
-        "Workflow valida que no hay features bloqueadas en feature_list.json",
-        "Workflow funciona correctamente cuando el repo se clona o usa como template (no depende de secreto ni configuración externa)",
-        "docs/ci-setup.md documenta cómo extender el workflow para añadir tests del proyecto concreto (pytest, npm test, cargo test)"
-      ],
-      "status": "done"
+      "status": "pending"
     }
   ]
 }
