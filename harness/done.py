@@ -35,12 +35,21 @@ def warn(msg): print(f"{YELLOW}[WARN]{NC}  {msg}")
 def info(msg): print(f"{BLUE}[INFO]{NC}  {msg}")
 
 
+def _validate_not_symlink(path):
+    """Abort if path is a symlink to prevent TOCTOU attacks."""
+    if os.path.islink(path):
+        fail(f"Security violation: {path} is a symlink. Aborting.")
+        sys.exit(1)
+
+
 def load_features():
+    _validate_not_symlink("feature_list.json")
     with open("feature_list.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def save_features(data):
+    _validate_not_symlink("feature_list.json")
     with open("feature_list.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
@@ -110,6 +119,7 @@ def main():
     if not os.path.exists("progress/current.md"):
         warn("No existe progress/current.md")
     else:
+        _validate_not_symlink("progress/current.md")
         with open("progress/current.md", "r", encoding="utf-8") as f:
             current_content = f.read()
 
@@ -123,11 +133,13 @@ def main():
 
 {current_content}
 """
+        _validate_not_symlink("progress/history.md")
         with open("progress/history.md", "a", encoding="utf-8") as f:
             f.write(archive_entry)
         ok("Sesión archivada en progress/history.md")
 
     # 6. Vaciar current.md
+    _validate_not_symlink("progress/current.md")
     template = """# Sesión actual
 
 > Este archivo se vacía al cerrar cada sesión y se mueve a `history.md`.

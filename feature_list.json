@@ -24,6 +24,21 @@
         "Criterio de aceptación 3"
       ],
       "status": "done"
+    },
+    {
+      "id": 2,
+      "name": "mejorar_seguridad_template",
+      "title": "Fortalecer seguridad del template Harness Engineering",
+      "description": "Aplicar parches de seguridad críticos detectados en el análisis del arnés: sanitización de inputs, prevención de ejecución arbitraria de código, validación de symlinks, ampliación de detección de secrets y hardening de scripts del harness.",
+      "acceptance": [
+        "init.sh usa set -euo pipefail y sanitiza el parseo de requirements.txt para prevenir code injection",
+        "security-check.py no excluye harness/ del análisis de comandos peligrosos y detecta más patrones de secrets (JWT, GitHub tokens, AWS, secrets en config)",
+        "start.py, done.py, block.py y doctor.py validan que archivos críticos (feature_list.json, progress/current.md) no sean symlinks antes de leer/escribir",
+        "block.py --from-file valida que la ruta objetivo esté dentro del directorio del proyecto (path traversal prevention)",
+        ".gitignore incluye .ssh/ y otros patrones sensibles que security-check.py espera encontrar",
+        "docs/security.md documenta un threat model básico, mejores prácticas de hardening y actualiza las reglas de verificación automatizada"
+      ],
+      "status": "done"
     }
   ]
 }

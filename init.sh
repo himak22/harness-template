@@ -8,7 +8,7 @@
 # Este template detecta tu stack automáticamente. Si tu stack no está soportado,
 # edita la sección "Detectar stack y ejecutar tests".
 
-set -u
+set -euo pipefail
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -92,11 +92,13 @@ if [ "$STACK" == "node" ]; then
   fi
 elif [ "$STACK" == "python" ]; then
   if [ -f "requirements.txt" ]; then
-    # Check if at least one package from requirements is importable
-    FIRST_PKG=$(head -n 1 requirements.txt | sed 's/[<>=!].*//' | tr -d ' ')
-    if [ -n "$FIRST_PKG" ] && [ "$FIRST_PKG" != "-r" ] && [ "$FIRST_PKG" != "#" ]; then
-      if python3 -c "import $FIRST_PKG" 2>/dev/null; then
-        ok "Dependencias de requirements.txt parecen instaladas ($FIRST_PKG importable)"
+    # Extract first package name and sanitize to prevent code injection
+    FIRST_PKG=$(head -n 1 requirements.txt | sed 's/[<>=!~].*//' | tr -d ' ')
+    # Only allow valid Python identifiers: [a-zA-Z0-9_][a-zA-Z0-9_]*
+    SANITIZED=$(printf '%s' "$FIRST_PKG" | sed 's/[^a-zA-Z0-9_]//g')
+    if [ -n "$SANITIZED" ] && [ "$SANITIZED" != "-r" ] && [ "$SANITIZED" != "#" ]; then
+      if python3 -c "import $SANITIZED" 2>/dev/null; then
+        ok "Dependencias de requirements.txt parecen instaladas ($SANITIZED importable)"
       else
         warn "Dependencias de requirements.txt no detectadas. Ejecuta: pip install -r requirements.txt"
       fi
