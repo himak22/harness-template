@@ -54,6 +54,20 @@
         "Se documenta en docs/security.md cómo desactivar checks específicos por stack si el proyecto no los necesita"
       ],
       "status": "done"
+    },
+    {
+      "id": 4,
+      "name": "github_actions_ci",
+      "title": "Integrar GitHub Actions CI para verificación automática del arnés",
+      "description": "Añadir un workflow de GitHub Actions que verifique automáticamente el arnés en cada PR y push a main. El workflow ejecuta init.sh y security-check.py para garantizar que el template no se mergea roto.",
+      "acceptance": [
+        "Workflow .github/workflows/ci.yml ejecuta init.sh en cada PR/push a main",
+        "Workflow ejecuta security-check.py en cada PR/push a main",
+        "Workflow valida que no hay features bloqueadas en feature_list.json",
+        "Workflow funciona correctamente cuando el repo se clona o usa como template (no depende de secreto ni configuración externa)",
+        "docs/ci-setup.md documenta cómo extender el workflow para añadir tests del proyecto concreto (pytest, npm test, cargo test)"
+      ],
+      "status": "done"
     }
   ]
 }

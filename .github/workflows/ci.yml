@@ -1,0 +1,75 @@
+name: Harness CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  harness-checks:
+    runs-on: ubuntu-latest
+    name: Verify Harness Engineering Template
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify harness structure (init.sh)
+        run: |
+          chmod +x init.sh
+          ./init.sh
+        shell: bash
+
+      - name: Run security checks
+        run: |
+          chmod +x harness/security-check.py
+          ./harness/security-check.py
+        shell: bash
+
+      - name: Check no blocked features
+        run: |
+          python3 -c "
+          import json, sys
+          try:
+              data = json.load(open('feature_list.json'))
+              blocked = [f for f in data['features'] if f['status'] == 'blocked']
+              if blocked:
+                  print(f'[FAIL]  {len(blocked)} feature(s) blocked:')
+                  for f in blocked:
+                      print(f'  - #{f[\"id\"]} {f[\"name\"]}')
+                  sys.exit(1)
+              in_progress = [f for f in data['features'] if f['status'] == 'in_progress']
+              if len(in_progress) > 1:
+                  print(f'[FAIL]  {len(in_progress)} features in_progress (max 1 allowed)')
+                  sys.exit(1)
+              print(f'[OK]    feature_list.json valid ({len(data[\"features\"])} features, 0 blocked)')
+          except Exception as e:
+              print(f'[FAIL]  Error reading feature_list.json: {e}')
+              sys.exit(1)
+          "
+        shell: bash
+
+      - name: Verify harness scripts are executable
+        run: |
+          for script in harness/*.py; do
+            if [ ! -x "$script" ]; then
+              echo "[FAIL]  $script is not executable"
+              exit 1
+            fi
+          done
+          echo "[OK]    All harness scripts are executable"
+        shell: bash
+
+      - name: Check for stale sessions
+        run: |
+          if grep -q "Feature en curso: _ninguna_" progress/current.md; then
+            echo "[OK]    No stale session in progress/current.md"
+          else
+            echo "[WARN]  progress/current.md may contain a stale session"
+          fi
+        shell: bash

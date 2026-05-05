@@ -377,3 +377,47 @@ _Anota aquí cada paso significativo: archivos creados, decisiones, bloqueos._
 
 _Cerrar sesión con `./harness/done.py`._
 
+
+---
+
+## 2026-05-05 — Feature 4: github_actions_ci
+- **Agente:** (ver progress/current.md)
+- **Resultado:** done
+
+# Sesión actual
+
+> Este archivo se vacía al cerrar cada sesión y se mueve a `history.md`.
+> Mientras trabajas, **mantenlo actualizado en tiempo real**, no al final.
+
+- **Feature en curso:** #4 — github_actions_ci
+- **Inicio:** 2026-05-05T13:17
+- **Agente:** implementer
+
+## Plan
+
+1. Leer docs/architecture.md y docs/conventions.md.
+2. Implementar según criterios de aceptación.
+3. Escribir tests que cubran happy path + error path.
+4. Ejecutar ./init.sh y asegurar que pasa.
+5. Llamar a ./harness/done.sh para cerrar.
+
+## Bitácora
+
+_Anota aquí cada paso significativo: archivos creados, decisiones, bloqueos._
+
+- [START] Sesión iniciada por implementer.
+- [DECISION] Complejidad baja → trabajo directo. 5 acceptance criteria, 2 archivos nuevos, sin investigación.
+- [CREATE] `.github/workflows/ci.yml` — workflow de GitHub Actions con 5 steps:
+  - `init.sh` valida estructura del arnés.
+  - `security-check.py` detecta secrets, SAST, CVEs, git leaks.
+  - Validación de `feature_list.json` (0 blocked, max 1 in_progress).
+  - Verificación de permisos ejecutables en scripts del harness.
+  - Detección de sesiones stale en `progress/current.md`.
+- [CREATE] `docs/ci-setup.md` — documentación de cómo extender CI por stack (Python, Node, Go, Rust) con ejemplos concretos.
+- [VERIFY] `./init.sh` → PASS.
+- [VERIFY] `./harness/security-check.py` → PASS.
+
+## Próximo paso
+
+_Cerrar sesión con `./harness/done.py`._
+
