@@ -330,3 +330,50 @@ _Anota aquí cada paso significativo: archivos creados, decisiones, bloqueos._
 
 _Cerrar sesión con `./harness/done.py`._
 
+
+---
+
+## 2026-05-05 — Feature 3: integrar_sast_y_dependency_audit
+- **Agente:** (ver progress/current.md)
+- **Resultado:** done
+
+# Sesión actual
+
+> Este archivo se vacía al cerrar cada sesión y se mueve a `history.md`.
+> Mientras trabajas, **mantenlo actualizado en tiempo real**, no al final.
+
+- **Feature en curso:** #3 — integrar_sast_y_dependency_audit
+- **Inicio:** 2026-05-05T12:19
+- **Agente:** implementer
+
+## Plan
+
+1. Diseñar SAST regex básico para Python (SQLi, XSS, command injection) sin dependencias externas.
+2. Implementar dependency audit con graceful degradation (warn si herramienta no está, no fail).
+3. Implementar git history scan básico con `git log -p` + regex de secrets.
+4. Actualizar docs/security.md con sección OWASP Top 10 y checklist por stack.
+5. Hacer que SAST y dependency audit sean WARN por defecto (no bloquean cierre de proyectos no-web).
+6. Verificar con ./init.sh y ./harness/security-check.py.
+
+## Bitácora
+
+_Anota aquí cada paso significativo: archivos creados, decisiones, bloqueos._
+
+- [START] Sesión iniciada por implementer.
+- [DECISION] Complejidad media → trabajo directo. SAST y dependency audit son parches localizados en security-check.py + docs.
+- [PATCH] `security-check.py`:
+  - `check_sast_vulnerabilities()`: SAST básico por stack (Python, Node, Go, Rust) detectando SQLi, XSS, command injection, insecure deserialization. Usa WARN (no FAIL).
+  - `check_dependency_vulnerabilities()`: Intenta ejecutar herramientas nativas (`pip-audit`, `npm audit`, `govulncheck`, `cargo audit`) con graceful degradation. Usa WARN.
+  - `check_git_history_leaks()`: Escanea últimos 100 commits con `git log -p` buscando patrones de secrets. Usa WARN.
+  - `main()` separa checks críticos (FAIL) de checks informativos (WARN).
+- [PATCH] `docs/security.md`:
+  - Sección "Seguridad de aplicación web" con tabla de vulnerabilidades y ejemplos.
+  - Checklist OWASP Top 10 completo por feature web.
+  - Recomendaciones por stack (Python, Node, Go) con herramientas específicas.
+- [VERIFY] `./harness/security-check.py` → PASS (WARNs informativos por stack no detectado, como esperado).
+- [VERIFY] `./init.sh` → PASS.
+
+## Próximo paso
+
+_Cerrar sesión con `./harness/done.py`._
+

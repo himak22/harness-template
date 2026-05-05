@@ -5,14 +5,20 @@ Se ejecuta automáticamente desde start.py y done.py.
 Puede ejecutarse manualmente: ./harness/security-check.py
 
 Comprueba:
-  1. Secrets hardcodeados en src/
+  1. Secrets hardcodeados en src/, config/, scripts/
   2. Archivos sensibles sin .gitignore
   3. Comandos peligrosos en scripts
   4. Datos PII en tests/fixtures
+  5. Vulnerabilidades de aplicación (SAST básico: SQLi, XSS, command injection)
+  6. Vulnerabilidades en dependencias (CVEs por stack)
+  7. Leaks de secrets en historial de git
+
+Nota: Los checks 5, 6 y 7 son informativos (WARN) y no bloquean el cierre.
 """
 
 import os
 import re
+import subprocess
 import sys
 
 RED = "\033[0;31m"
@@ -220,13 +226,235 @@ def check_pii_in_tests():
         ok("No real PII detected in tests")
 
 
+def _detect_stack():
+    """Detecta el stack del proyecto igual que init.sh."""
+    if os.path.exists("go.mod"):
+        return "go"
+    if os.path.exists("package.json"):
+        return "node"
+    if os.path.exists("requirements.txt") or os.path.exists("pyproject.toml") or os.path.exists("src"):
+        return "python"
+    if os.path.exists("Cargo.toml"):
+        return "rust"
+    return "unknown"
+
+
+def check_sast_vulnerabilities():
+    """SAST básico: busca patrones de SQLi, XSS, command injection en código fuente.
+    Este check es informativo (WARN) para no bloquear proyectos no-web."""
+    global SEVERITY
+    stack = _detect_stack()
+    if stack == "unknown":
+        warn("Stack no detectado, saltando SAST")
+        return
+
+    # Patrones por stack
+    sast_patterns = {
+        "python": [
+            (r'\.execute\s*\(\s*["\'].*\%s.*["\']', "Possible SQL injection (string formatting in query)"),
+            (r'\.execute\s*\(\s*f["\']', "Possible SQL injection (f-string in query)"),
+            (r'os\.system\s*\(', "Possible command injection (os.system)"),
+            (r'subprocess\.call\s*\(\s*[^\)]*shell\s*=\s*True', "Possible command injection (subprocess with shell=True)"),
+            (r'render_template_string\s*\(', "Possible XSS (render_template_string with user input)"),
+            (r'Markup\s*\(', "Possible XSS (Markup without escaping)"),
+            (r'pickle\.loads?\s*\(', "Insecure deserialization (pickle)"),
+            (r'yaml\.load\s*\([^,)]*\)', "Insecure deserialization (yaml.load without Loader)"),
+        ],
+        "node": [
+            (r'\.query\s*\(\s*[`"\'].*\$\{.*\}[`"\']', "Possible SQL injection (template literal in query)"),
+            (r'exec\s*\(', "Possible command injection (exec)"),
+            (r'child_process', "Possible command injection (child_process)"),
+            (r'innerHTML\s*=\s*[^;]+', "Possible XSS (innerHTML assignment)"),
+            (r'document\.write\s*\(', "Possible XSS (document.write)"),
+            (r'eval\s*\(', "Dangerous eval() detected"),
+        ],
+        "go": [
+            (r'\.Query\s*\(\s*[^)]+\+', "Possible SQL injection (string concatenation in query)"),
+            (r'fmt\.Sprintf\s*\([^,]*,.*\).*\.Query', "Possible SQL injection (Sprintf in query)"),
+            (r'os\.Exec\s*\(', "Possible command injection (os.Exec with dynamic input)"),
+            (r'template\.HTML\s*\(', "Possible XSS (template.HTML)"),
+        ],
+        "rust": [
+            (r'\.query\s*\(\s*[^)]+format!', "Possible SQL injection (format! in query)"),
+            (r'Command::new\s*\([^)]+format!', "Possible command injection (format! in Command)"),
+        ],
+    }
+
+    patterns = sast_patterns.get(stack, [])
+    if not patterns:
+        warn(f"SAST no implementado para stack: {stack}")
+        return
+
+    extensions = {
+        "python": ".py", "node": (".js", ".ts", ".jsx", ".tsx"),
+        "go": ".go", "rust": ".rs"
+    }
+    ext = extensions.get(stack)
+
+    found = False
+    skip_dirs = {".git", "node_modules", "__pycache__", ".venv", "venv", "env", ".tox", "target", "dist", "build"}
+    for root, _, files in os.walk("."):
+        if any(skip in root for skip in skip_dirs):
+            continue
+        for fname in files:
+            if ext and not fname.endswith(ext):
+                continue
+            fpath = os.path.join(root, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except Exception:
+                continue
+            for pattern, desc in patterns:
+                for m in re.finditer(pattern, content, re.IGNORECASE):
+                    line_start = content.rfind('\n', 0, m.start()) + 1
+                    line_end = content.find('\n', m.end())
+                    if line_end == -1:
+                        line_end = len(content)
+                    line = content[line_start:line_end].strip()
+                    # Skip if this line is a comment explaining the pattern
+                    if line.startswith("#") or line.startswith("//") or line.startswith("*"):
+                        continue
+                    warn(f"{desc} in {fpath}")
+                    found = True
+                    if SEVERITY != "FAIL":
+                        SEVERITY = "WARN"
+
+    if not found:
+        ok(f"No SAST warnings for {stack} stack")
+
+
+def check_dependency_vulnerabilities():
+    """Intenta ejecutar herramientas nativas de dependency audit por stack.
+    Es informativo (WARN) para no bloquear si la herramienta no está."""
+    global SEVERITY
+    stack = _detect_stack()
+
+    if stack == "python":
+        if os.path.exists("requirements.txt") or os.path.exists("pyproject.toml"):
+            _run_tool("pip-audit", ["pip-audit", "--format=summary"], "Python dependency audit")
+    elif stack == "node":
+        if os.path.exists("package.json"):
+            _run_tool("npm audit", ["npm", "audit", "--audit-level=moderate"], "Node dependency audit")
+    elif stack == "go":
+        if os.path.exists("go.mod"):
+            _run_tool("govulncheck", ["govulncheck", "./..."], "Go vulnerability check")
+    elif stack == "rust":
+        if os.path.exists("Cargo.toml"):
+            _run_tool("cargo audit", ["cargo", "audit"], "Rust dependency audit")
+    else:
+        warn("Dependency audit skipped (stack not detected or not supported)")
+
+
+def _run_tool(name, cmd, desc):
+    """Ejecuta una herramienta de dependency audit. WARN si falla o encuentra issues."""
+    global SEVERITY
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            # npm audit retorna 1 si encuentra vulnerabilidades
+            if "npm" in cmd and "audit" in cmd:
+                warn(f"{desc}: vulnerabilities found. Run 'npm audit fix'.")
+            elif "govulncheck" in cmd:
+                warn(f"{desc}: vulnerabilities found.")
+            elif "cargo" in cmd and "audit" in cmd:
+                warn(f"{desc}: vulnerabilities found.")
+            elif "pip-audit" in cmd:
+                warn(f"{desc}: vulnerabilities found.")
+            else:
+                warn(f"{desc}: exited with code {result.returncode}")
+            if SEVERITY != "FAIL":
+                SEVERITY = "WARN"
+        else:
+            ok(f"{desc}: no known vulnerabilities")
+    except FileNotFoundError:
+        warn(f"{desc}: tool '{name}' not installed. Install it for CVE scanning.")
+        if SEVERITY != "FAIL":
+            SEVERITY = "WARN"
+    except subprocess.TimeoutExpired:
+        warn(f"{desc}: timed out after 120s")
+        if SEVERITY != "FAIL":
+            SEVERITY = "WARN"
+    except Exception as e:
+        warn(f"{desc}: error running tool: {e}")
+        if SEVERITY != "FAIL":
+            SEVERITY = "WARN"
+
+
+def check_git_history_leaks():
+    """Escanea el historial de git buscando leaks de secrets.
+    Es informativo (WARN) para no bloquear repos con historial previo."""
+    global SEVERITY
+    if not os.path.exists(".git"):
+        warn("Not a git repository, skipping git history scan")
+        return
+
+    # Patterns to search in git history
+    history_patterns = [
+        (r'AKIA[0-9A-Z]{16}', "Possible AWS access key in git history"),
+        (r'ghp_[a-zA-Z0-9]{36}', "Possible GitHub PAT in git history"),
+        (r'sk-[a-zA-Z0-9]{20,}', "Possible OpenAI/API key in git history"),
+        (r'api[_-]?key\s*[:=]\s*["\'][a-zA-Z0-9]{16,}["\']', "Possible API key in git history"),
+        (r'password\s*[:=]\s*["\'][^"\']{4,}["\']', "Possible password in git history"),
+    ]
+
+    found = False
+    try:
+        # Scan last 100 commits with patches
+        result = subprocess.run(
+            ["git", "log", "-100", "-p", "--all"],
+            capture_output=True, text=True, timeout=60
+        )
+        if result.returncode != 0:
+            warn("Could not scan git history")
+            if SEVERITY != "FAIL":
+                SEVERITY = "WARN"
+            return
+
+        for pattern, desc in history_patterns:
+            matches = re.finditer(pattern, result.stdout, re.IGNORECASE)
+            for m in matches:
+                val = m.group(0).lower()
+                if any(x in val for x in ["example", "dummy", "test", "fake", "placeholder", "your_"]):
+                    continue
+                warn(f"{desc}: {m.group(0)[:40]}...")
+                found = True
+                if SEVERITY != "FAIL":
+                    SEVERITY = "WARN"
+
+        if not found:
+            ok("No obvious secrets in recent git history (last 100 commits)")
+    except subprocess.TimeoutExpired:
+        warn("Git history scan timed out")
+        if SEVERITY != "FAIL":
+            SEVERITY = "WARN"
+    except Exception as e:
+        warn(f"Git history scan error: {e}")
+        if SEVERITY != "FAIL":
+            SEVERITY = "WARN"
+
+
 def main():
     print("── Security Check ──────────────────────────────────────")
 
+    # Checks críticos (pueden causar FAIL)
     check_secrets_in_source()
     check_sensitive_files_gitignored()
     check_dangerous_commands()
     check_pii_in_tests()
+
+    # Checks informativos (solo WARN, nunca FAIL)
+    print()
+    print("── Application Security (SAST) ─────────────────────────")
+    check_sast_vulnerabilities()
+
+    print()
+    print("── Dependency Audit (CVEs) ─────────────────────────────")
+    check_dependency_vulnerabilities()
+
+    print()
+    print("── Git History Scan ────────────────────────────────────")
+    check_git_history_leaks()
 
     print()
     if SEVERITY == "PASS":

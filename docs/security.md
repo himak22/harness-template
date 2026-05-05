@@ -127,6 +127,65 @@ El script `harness/security-check.py` se ejecuta automáticamente en:
 
 ---
 
+## Seguridad de aplicación web
+
+> **Importante:** El arnés detecta malas prácticas y vulnerabilidades **básicas**, pero NO sustituye un pentest ni un SAST profesional. Si construyes una aplicación web, estos checks son tu primera línea de defensa, no la única.
+
+### Qué NO detecta security-check.py
+
+| Vulnerabilidad | Ejemplo de código inseguro | Cómo prevenirlo |
+|----------------|---------------------------|-----------------|
+| **SQL Injection** | `cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")` | Usa ORM o queries parametrizadas: `cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))` |
+| **XSS (Cross-Site Scripting)** | `return f"<div>{request.form['comment']}</div>"` | Escapa todo output del usuario con la función de tu framework (`escape()`, `htmlspecialchars()`) |
+| **Command Injection** | `os.system(f"ping {user_input}")` | Nunca concatenes input del usuario en comandos del sistema. Usa listas de argumentos: `subprocess.run(["ping", user_input])` |
+| **CSRF** | Formulario sin token CSRF | Usa el mecanismo CSRF de tu framework (Django, Flask-WTF, Express csurf) |
+| **Insecure Deserialization** | `pickle.loads(user_input)` | Nunca deserialices datos del usuario con `pickle`, `yaml.load()` sin `SafeLoader`, o `json` sin schema validation |
+| **Broken Authentication** | Passwords en texto plano, sesiones sin expiración | Usa librerías probadas (bcrypt, argon2), JWT con expiración, HTTPS obligatorio |
+| **Security Misconfiguration** | `DEBUG=True` en producción, headers por defecto | Desactiva debug, usa headers de seguridad (CSP, HSTS, X-Frame-Options), oculta versiones de stack |
+| **Sensitive Data Exposure** | Enviar datos sensibles sin TLS, logs con passwords | HTTPS everywhere, enmascara datos en logs, cifra en reposo |
+
+### OWASP Top 10 — Checklist por feature web
+
+Antes de declarar `done` en una feature que expone una interfaz web o API:
+
+- [ ] **A01: Broken Access Control** — Los endpoints validan autenticación y autorización. No se confía en `user_id` del request sin verificar ownership.
+- [ ] **A02: Cryptographic Failures** — Contraseñhas hasheadas con bcrypt/argon2. Tokens JWT firmados y con expiración. HTTPS en producción.
+- [ ] **A03: Injection** — Todas las queries a base de datos usan parametrización. No hay `f-string` SQL ni concatenación.
+- [ ] **A04: Insecure Design** — Business logic validada server-side. No se confía en validación client-side.
+- [ ] **A05: Security Misconfiguration** — `DEBUG=False`, headers de seguridad activos, versiones de dependencias actualizadas.
+- [ ] **A06: Vulnerable and Outdated Components** — `security-check.py` dependency audit pasa sin CVEs críticas.
+- [ ] **A07: Identification and Authentication Failures** — Rate limiting en login, bloqueo tras intentos fallidos, sesiones invalidadas en logout.
+- [ ] **A08: Software and Data Integrity Failures** — Dependencias instaladas desde fuentes verificadas (PyPI, npm registry oficial). No se usa `pip install` desde URLs arbitrarias.
+- [ ] **A09: Security Logging and Monitoring Failures** — Eventos de seguridad logueados (login fallido, acceso no autorizado). Logs no contienen secrets.
+- [ ] **A10: Server-Side Request Forgery (SSRF)** — No se usan URLs proporcionadas por el usuario para hacer requests internos. Whitelist de dominios permitidos.
+
+### Recomendaciones por stack
+
+#### Python (Flask / FastAPI / Django)
+
+- **SQLi:** Usa SQLAlchemy ORM o queries parametrizadas. Nunca concatenes strings.
+- **XSS:** Flask usa Jinja2 con autoescaping por defecto. No uses `| safe` sin validar.
+- **Deserialización:** Usa `yaml.safe_load()` en lugar de `yaml.load()`. Nunca uses `pickle` con datos del usuario.
+- **Command injection:** Prefiere `subprocess.run([cmd, arg1, arg2])` sobre `subprocess.run(cmd, shell=True)`.
+- **Dependency audit:** `pip install pip-audit && pip-audit`
+
+#### Node.js (Express / NestJS)
+
+- **SQLi:** Usa ORMs (Sequelize, Prisma, TypeORM) o queries parametrizadas.
+- **XSS:** Escapa output con librerías como `escape-html` o usa templates seguros (EJS, Pug).
+- **Eval:** Nunca uses `eval()` o `new Function()` con input del usuario.
+- **Command injection:** Usa `child_process` con arrays, nunca con `shell: true` y input concatenado.
+- **Dependency audit:** `npm audit` (incluido con npm)
+
+#### Go
+
+- **SQLi:** Usa `database/sql` con placeholders (`$1`, `$2`).
+- **XSS:** Usa `html/template` en lugar de `text/template` para HTML.
+- **Command injection:** `exec.Command()` con argumentos separados, nunca concatenados.
+- **Dependency audit:** `go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...`
+
+---
+
 ## Checklist de seguridad para nuevas features
 
 - [ ] No se añaden secrets hardcodeados.
@@ -135,3 +194,4 @@ El script `harness/security-check.py` se ejecuta automáticamente en:
 - [ ] `.gitignore` cubre nuevos archivos sensibles si se introducen.
 - [ ] `security-check.py` pasa antes de declarar `done`.
 - [ ] Se validan symlinks en archivos críticos si se añaden nuevos scripts del harness.
+- [ ] Si es una aplicación web, se revisa el checklist OWASP Top 10.

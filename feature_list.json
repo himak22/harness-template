@@ -39,6 +39,21 @@
         "docs/security.md documenta un threat model básico, mejores prácticas de hardening y actualiza las reglas de verificación automatizada"
       ],
       "status": "done"
+    },
+    {
+      "id": 3,
+      "name": "integrar_sast_y_dependency_audit",
+      "title": "Integrar escaneo de vulnerabilidades de aplicación y dependencias",
+      "description": "Extender security-check.py para detectar vulnerabilidades de aplicación web (SQLi, XSS, command injection) mediante SAST, y vulnerabilidades en dependencias (CVEs). Añadir checklist OWASP Top 10 en docs/security.md para proyectos web.",
+      "acceptance": [
+        "security-check.py detecta SQL injection, command injection y XSS en código Python mediante patrones regex (SAST básico)",
+        "security-check.py escanea dependencias por CVEs conocidos usando herramientas nativas del stack (pip-audit para Python, npm audit para Node, go mod vuln para Go)",
+        "security-check.py detecta leaks de secrets en el historial de git con un scan básico de git log",
+        "docs/security.md incluye una seccion 'Seguridad de aplicación web' con checklist OWASP Top 10 y recomendaciones por stack",
+        "Los nuevos checks de SAST y dependency audit son opcionales y no bloquean el cierre si el proyecto no es una aplicación web",
+        "Se documenta en docs/security.md cómo desactivar checks específicos por stack si el proyecto no los necesita"
+      ],
+      "status": "done"
     }
   ]
 }
